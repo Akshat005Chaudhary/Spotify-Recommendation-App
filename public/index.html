@@ -18,6 +18,7 @@
         width: 500px;
       }
     </style>
+    <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
   </head>
 
   <body>
@@ -34,7 +35,139 @@
         </button>
       </div>
     </div>
+    <!-- Commit 2 start -->
+    <div
+      class="container"
+      id="artist-search-container"
+      style="margin-top: 30px"
+    >
+      <h3>Search for Artists</h3>
+      <input
+        type="text"
+        id="artist-search"
+        class="form-control"
+        placeholder="Type artist name..."
+        autocomplete="off"
+      />
+      <ul
+        id="artist-suggestions"
+        class="list-group"
+        style="position: absolute; z-index: 1000; width: 500px; display: none"
+      ></ul>
+      <h4>Selected Artists</h4>
+      <ul id="selected-artists" class="list-group"></ul>
+    </div>
+    <script>
+      (function () {
+        var access_token = null;
+        var debounceTimeout = null;
+        var $search = $("#artist-search");
+        var $suggestions = $("#artist-suggestions");
+        var $selected = $("#selected-artists");
+        var selectedArtists = [];
 
+        // Get access_token from oauth info if available
+        function getAccessToken() {
+          var params = {};
+          var e,
+            r = /([^&;=]+)=?([^&;]*)/g,
+            q = window.location.hash.substring(1);
+          while ((e = r.exec(q))) params[e[1]] = decodeURIComponent(e[2]);
+          return params.access_token || null;
+        }
+        access_token = getAccessToken();
+        console.log("Access Token:", access_token);
+
+        function renderSuggestions(artists) {
+          $suggestions.empty();
+          if (artists.length === 0) {
+            $suggestions.hide();
+            return;
+          }
+          artists.forEach(function (artist) {
+            var $item = $("<li>")
+              .addClass("list-group-item")
+              .css("cursor", "pointer")
+              .text(artist.name)
+              .attr("data-id", artist.id)
+              .attr("data-name", artist.name);
+            $suggestions.append($item);
+          });
+          $suggestions.show();
+        }
+
+        function renderSelectedArtists() {
+          $selected.empty();
+          selectedArtists.forEach(function (artist, idx) {
+            var $item = $("<li>")
+              .addClass("list-group-item")
+              .text(artist.name + " ")
+              .append(
+                $("<button>")
+                  .addClass("btn btn-xs btn-danger pull-right remove-artist")
+                  .text("Remove")
+                  .attr("data-idx", idx)
+              );
+            $selected.append($item);
+          });
+        }
+
+        $search.on("input", function () {
+          var query = $search.val().trim();
+          clearTimeout(debounceTimeout);
+          if (!query || !access_token) {
+            $suggestions.hide();
+            return;
+          }
+          debounceTimeout = setTimeout(function () {
+            $.ajax({
+              url: "https://api.spotify.com/v1/search",
+              headers: { Authorization: "Bearer " + access_token },
+              data: { q: query, type: "artist", limit: 5 },
+              success: function (data) {
+                var artists =
+                  data.artists && data.artists.items ? data.artists.items : [];
+                renderSuggestions(artists);
+              },
+              error: function () {
+                $suggestions.hide();
+              },
+            });
+          }, 300);
+        });
+
+        // Hide suggestions when clicking outside
+        $(document).on("click", function (e) {
+          if (!$(e.target).closest("#artist-search-container").length) {
+            $suggestions.hide();
+          }
+        });
+
+        // Add artist on suggestion click
+        $suggestions.on("click", "li", function () {
+          var id = $(this).attr("data-id");
+          var name = $(this).attr("data-name");
+          if (
+            !selectedArtists.some(function (a) {
+              return a.id === id;
+            })
+          ) {
+            selectedArtists.push({ id: id, name: name });
+            renderSelectedArtists();
+          }
+          $suggestions.hide();
+          $search.val("");
+        });
+
+        // Remove artist
+        $selected.on("click", ".remove-artist", function () {
+          var idx = $(this).attr("data-idx");
+          selectedArtists.splice(idx, 1);
+          renderSelectedArtists();
+        });
+      })();
+    </script>
+    <!-- Commit 2 end -->
     <script id="user-profile-template" type="text/x-handlebars-template">
       <h1>Logged in as {{display_name}}</h1>
       <div class="media">
@@ -68,7 +201,7 @@
     </script>
 
     <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/2.0.0-alpha.1/handlebars.min.js"></script>
-    <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+
     <script>
       (function () {
         /**
