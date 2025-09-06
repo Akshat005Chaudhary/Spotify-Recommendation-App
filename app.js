@@ -156,5 +156,86 @@ app.get("/refresh_token", function (req, res) {
   });
 });
 
+app.post("/recommendations", express.json(), async function (req, res) {
+  try {
+    const selectedArtists = req.body.artists; // array of {id, name} from frontend
+    const accessToken = req.headers.authorization?.split(" ")[1];
+
+    if (!accessToken) {
+      return res.status(401).json({ error: "Missing access token" });
+    }
+    if (!selectedArtists || selectedArtists.length === 0) {
+      return res.status(400).json({ error: "No selected artists provided" });
+    }
+
+    // Helper to call Spotify API
+    const fetchSpotify = (url) =>
+      new Promise((resolve, reject) => {
+        request.get(
+          {
+            url,
+            headers: { Authorization: "Bearer " + accessToken },
+            json: true,
+          },
+          (err, response, body) => {
+            if (err) reject(err);
+            else if (response.statusCode !== 200) reject(body);
+            else resolve(body);
+          }
+        );
+      });
+
+    // 1. Get user's top artists (limit 50)
+    const topArtistsData = await fetchSpotify(
+      "https://api.spotify.com/v1/me/top/artists?limit=50"
+    );
+    const topArtists = topArtistsData.items.map((a) => ({
+      id: a.id,
+      name: a.name,
+    }));
+
+    // 2. Get user's top tracks (limit 50)
+    const topTracksData = await fetchSpotify(
+      "https://api.spotify.com/v1/me/top/tracks?limit=50"
+    );
+    const topTrackArtists = [];
+    topTracksData.items.forEach((track) => {
+      track.artists.forEach((a) => {
+        topTrackArtists.push({ id: a.id, name: a.name });
+      });
+    });
+
+    // 3. Merge into a sorted unique list
+    const merged = [];
+    const seen = new Set();
+
+    // first push top artists
+    topArtists.forEach((a) => {
+      if (!seen.has(a.id)) {
+        merged.push(a);
+        seen.add(a.id);
+      }
+    });
+
+    // then push from top track artists
+    topTrackArtists.forEach((a) => {
+      if (!seen.has(a.id)) {
+        merged.push(a);
+        seen.add(a.id);
+      }
+    });
+
+    // 4. Match with selectedArtists
+    const selectedIds = new Set(selectedArtists.map((a) => a.id));
+    const matches = merged.filter((a) => selectedIds.has(a.id));
+
+    // 5. Return just the names in sorted order
+    res.json(matches.map((a) => a.name));
+  } catch (err) {
+    console.error("Error in /recommendations:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 console.log("Listening on 8888");
 app.listen(8888);

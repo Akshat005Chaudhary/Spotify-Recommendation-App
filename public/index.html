@@ -35,7 +35,7 @@
         </button>
       </div>
     </div>
-    <!-- Commit 2 start -->
+    <!-- New Commit  start -->
     <div
       class="container"
       id="artist-search-container"
@@ -56,6 +56,14 @@
       ></ul>
       <h4>Selected Artists</h4>
       <ul id="selected-artists" class="list-group"></ul>
+      <button
+        class="btn btn-success"
+        id="get-recommendation"
+        style="margin-top: 15px"
+      >
+        Get Recommendations
+      </button>
+      <div id="recommendation-results" style="margin-top: 20px"></div>
     </div>
     <script>
       (function () {
@@ -165,9 +173,51 @@
           selectedArtists.splice(idx, 1);
           renderSelectedArtists();
         });
+        $("#get-recommendation").on("click", function () {
+          if (!access_token) {
+            alert("You must be logged in to get recommendations.");
+            return;
+          }
+          if (selectedArtists.length === 0) {
+            alert("Please select at least one artist.");
+            return;
+          }
+
+          $.ajax({
+            url: "/recommendations",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ artists: selectedArtists }),
+            headers: { Authorization: "Bearer " + access_token },
+            success: function (response) {
+              var html = "";
+              if (response && response.length > 0) {
+                html += "<h4>Recommended Artists</h4><ul class='list-group'>";
+                response.forEach(function (artistName) {
+                  html += "<li class='list-group-item'>" + artistName + "</li>";
+                });
+                html += "</ul>";
+              } else {
+                html =
+                  "<div class='alert alert-info'>No recommendations found.</div>";
+              }
+              $("#recommendation-results").html(html);
+            },
+            error: function (xhr) {
+              var msg = "Failed to get recommendations.";
+              if (xhr.responseJSON && xhr.responseJSON.error) {
+                msg += " " + xhr.responseJSON.error;
+              }
+              $("#recommendation-results").html(
+                "<div class='alert alert-danger'>" + msg + "</div>"
+              );
+            },
+          });
+        });
       })();
     </script>
-    <!-- Commit 2 end -->
+    <!-- New Commit end -->
+
     <script id="user-profile-template" type="text/x-handlebars-template">
       <h1>Logged in as {{display_name}}</h1>
       <div class="media">
